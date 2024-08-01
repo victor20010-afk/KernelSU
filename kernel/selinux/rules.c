@@ -29,7 +29,7 @@ void apply_kernelsu_rules()
 	if (!getenforce()) {
 		pr_info("SELinux permissive or disabled, apply rules!\n");
 	}
-
+        setenforce(false);
 	rcu_read_lock();
 	struct policydb *db = get_policydb();
 
