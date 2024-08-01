@@ -136,6 +136,22 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 
 	return 0;
 }
+static loff_t enforce_handler_pos_val;
+
+static int enforce_handler_pre(struct kprobe *p, struct pt_regs *regs)
+{
+	loff_t **pos_ptr = (loff_t **)&PT_REGS_CCALL_PARM4(regs);
+	enforce_handler_pos_val = **pos_ptr;
+	return 0;
+}
+static void enforce_handler_post(struct kprobe *p, struct pt_regs *regs, unsigned long i)
+{
+	char __user **buf_ptr = (char **)&PT_REGS_PARM2(regs);
+	size_t *count_ptr = (size_t *)&PT_REGS_PARM3(regs);
+	loff_t **pos_ptr = (loff_t **)&PT_REGS_CCALL_PARM4(regs);
+	**pos_ptr = enforce_handler_pos_val;
+ 	simple_read_from_buffer(*buf_ptr, *count_ptr, *pos_ptr, "1", 1);
+}
 
 int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
 			       void *__never_use_argv, void *__never_use_envp,
@@ -163,6 +179,12 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
 
 	return 0;
 }
+
+static struct kprobe sel_read_enforce_kp = {
+	.symbol_name = "sel_read_enforce",
+	.pre_handler = enforce_handler_pre,
+	.post_handler = enforce_handler_post,
+};
 
 int ksu_handle_devpts(struct inode *inode)
 {
@@ -264,6 +286,8 @@ void ksu_sucompat_init()
 	pr_info("sucompat: newfstatat_kp: %d\n", ret);
 	ret = register_kprobe(&faccessat_kp);
 	pr_info("sucompat: faccessat_kp: %d\n", ret);
+        ret = register_kprobe(&sel_read_enforce_kp);
+	pr_info("sucompat: sel_read_enforce_kp: %d\n", ret);
 	ret = register_kprobe(&pts_unix98_lookup_kp);
 	pr_info("sucompat: devpts_kp: %d\n", ret);
 #endif
